@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cyber Attack Detection — UNSW-NB15</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
+              stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h1>Cyber Attack Detection</h1>
+      <span class="brand-sub">UNSW-NB15 · Cascaded Ensemble</span>
+    </div>
+    <nav role="tablist" aria-label="Views">
+      <button role="tab" class="tab on" data-view="single" aria-selected="true">Single record</button>
+      <button role="tab" class="tab"    data-view="batch"  aria-selected="false">Batch file</button>
+      <button role="tab" class="tab"    data-view="perf"   aria-selected="false">Performance</button>
+      <button role="tab" class="tab"    data-view="about"  aria-selected="false">About</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<!-- ══════════════════════════════════════════════════════ SINGLE RECORD ══ -->
+<section id="view-single" class="view" role="tabpanel">
+  <div class="split">
+
+    <div class="pane">
+      <h2>Traffic record</h2>
+      <p class="hint">
+        Paste one UNSW-NB15 row as JSON, or click <em>Load test record</em>
+        to grab a random sample from the held-out test set.
+      </p>
+      <textarea id="record" spellcheck="false"
+                aria-label="Traffic record JSON"
+                placeholder='{"dur": 0.12, "proto": "tcp", "service": "http", …}'></textarea>
+      <div class="row">
+        <button id="btn-sample"  class="btn ghost">Load test record</button>
+        <button id="btn-analyze" class="btn">Analyze record</button>
+      </div>
+      <p id="actual"       class="hint tag-actual" hidden></p>
+      <p id="single-error" class="error" role="alert" hidden></p>
+    </div>
+
+    <div class="pane" id="result-pane">
+      <h2>Result</h2>
+      <div id="empty" class="empty">
+        No record analyzed yet. Load a test record and click <em>Analyze record</em>.
+      </div>
+
+      <div id="result" hidden>
+        <div id="verdict" class="verdict"></div>
+
+        <!-- Stage 1 -->
+        <h3>Stage 1 — Binary screening (LightGBM)</h3>
+        <div class="meter" id="m-stage1" role="img" aria-label="Malicious probability meter">
+          <div class="meter-fill" id="m-stage1-fill"></div>
+          <div class="meter-tick" id="m-stage1-tick" title="Threshold"></div>
+        </div>
+        <p class="meter-note" id="stage1-note"></p>
+
+        <!-- Stage 2 + 3 (only for suspicious) -->
+        <div id="stage2">
+          <h3>Stage 2 — Attack classification (CatBoost)</h3>
+          <div id="class-bars" role="list" aria-label="Class probabilities"></div>
+
+          <h3>Stage 3 — Confidence margin</h3>
+          <p class="hint small">
+            M = p<sub>1</sub> − p<sub>2</sub>. Below the threshold → flagged for review.
+          </p>
+          <div class="meter" id="m-margin" role="img" aria-label="Confidence margin meter">
+            <div class="meter-fill" id="m-margin-fill"></div>
+            <div class="meter-tick" id="m-margin-tick" title="Threshold"></div>
+          </div>
+          <p class="meter-note" id="margin-note"></p>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.split -->
+</section>
+
+<!-- ══════════════════════════════════════════════════════════ BATCH ══════ -->
+<section id="view-batch" class="view" hidden role="tabpanel">
+  <div class="pane wide">
+    <h2>Batch file analysis</h2>
+    <p class="hint">
+      Upload a CSV in UNSW-NB15 format. The first 20 000 rows are analyzed.
+      Results show label distributions, escalation counts, and a row-level table.
+    </p>
+    <div class="row">
+      <label class="file-label">
+        <span>Choose CSV file</span>
+        <input type="file" id="file" accept=".csv" aria-label="CSV file upload">
+      </label>
+      <button id="btn-batch" class="btn">Analyze file</button>
+    </div>
+    <p id="batch-error" class="error" role="alert" hidden></p>
+    <p id="batch-progress" class="hint" hidden>Processing…</p>
+
+    <div id="batch-out" hidden>
+      <dl class="stats" id="batch-stats"></dl>
+
+      <h3>Predicted label distribution</h3>
+      <div id="batch-bars" role="list" aria-label="Label distribution"></div>
+
+      <h3 id="batch-table-title">Records</h3>
+      <div class="table-wrap">
+        <table id="batch-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Prediction</th>
+              <th class="num">P(malicious)</th>
+              <th class="num">Margin</th>
+              <th>Status</th>
+              <th>Actual</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════ PERFORMANCE ══════ -->
+<section id="view-perf" class="view" hidden role="tabpanel">
+  <div class="pane wide">
+    <h2>Model performance</h2>
+    <p class="hint">
+      Measured on the held-out UNSW-NB15 test partition.
+      Thresholds were selected on validation data only — the test set was never
+      seen during any tuning step.
+    </p>
+    <p id="perf-error" class="error" role="alert" hidden></p>
+    <p id="perf-loading" class="hint" hidden>Loading metrics…</p>
+
+    <div id="perf-out" hidden>
+      <dl class="stats" id="perf-stats"></dl>
+
+      <h3>Per-class results</h3>
+      <div class="table-wrap">
+        <table id="perf-table">
+          <thead>
+            <tr>
+              <th>Class</th>
+              <th class="num">Precision</th>
+              <th class="num">Recall</th>
+              <th class="num">F1</th>
+              <th class="num">Records</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <h3>Thresholds used</h3>
+      <dl class="stats" id="perf-thresholds"></dl>
+
+      <p id="perf-baseline" class="hint baseline-note"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════ ABOUT ══════ -->
+<section id="view-about" class="view" hidden role="tabpanel">
+  <div class="pane wide about-pane">
+    <h2>About this system</h2>
+
+    <h3>Architecture — Uncertainty-Aware Cascaded Ensemble</h3>
+    <p>
+      The system processes each network traffic record through three sequential stages,
+      avoiding unnecessary multiclass classification for traffic that can be confidently
+      identified as normal.
+    </p>
+
+    <div class="pipeline">
+      <div class="pipe-stage">
+        <div class="pipe-num">1</div>
+        <div>
+          <strong>Binary screening</strong>
+          <span>LightGBM classifies each record as Normal or Suspicious.
+          Records below the probability threshold exit here labelled <em>Normal</em>.</span>
+        </div>
+      </div>
+      <div class="pipe-arrow">↓</div>
+      <div class="pipe-stage">
+        <div class="pipe-num">2</div>
+        <div>
+          <strong>Attack classification</strong>
+          <span>CatBoost assigns the most likely attack category to suspicious records.
+          Nine attack types are covered: DoS, Exploits, Fuzzers, Generic, Reconnaissance,
+          Backdoor, Analysis, Shellcode, Worms.</span>
+        </div>
+      </div>
+      <div class="pipe-arrow">↓</div>
+      <div class="pipe-stage">
+        <div class="pipe-num">3</div>
+        <div>
+          <strong>Confidence margin</strong>
+          <span>M = p<sub>1</sub> − p<sub>2</sub>. When the gap between the top two
+          predictions is below a validation-selected threshold, the record is
+          <em>escalated for review</em> rather than accepted as a confident prediction.</span>
+        </div>
+      </div>
+    </div>
+
+    <h3>Dataset</h3>
+    <p>
+      <strong>UNSW-NB15</strong> — a network intrusion dataset created at UNSW Canberra.
+      It contains nine attack families plus normal traffic across 49 features extracted
+      from raw network packets.
+    </p>
+
+    <h3>REST API</h3>
+    <table class="api-table">
+      <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>GET</td> <td>/api/status</td>   <td>Health check — model loaded, CSV present</td></tr>
+        <tr><td>GET</td> <td>/api/features</td> <td>List of feature names expected by the model</td></tr>
+        <tr><td>GET</td> <td>/api/sample</td>   <td>Random record from the test set</td></tr>
+        <tr><td>POST</td><td>/api/predict</td>  <td>Predict a single JSON traffic record</td></tr>
+        <tr><td>POST</td><td>/api/batch</td>    <td>Predict an uploaded UNSW-NB15 CSV (≤ 20 000 rows)</td></tr>
+        <tr><td>GET</td> <td>/api/metrics</td>  <td>Full evaluation metrics from training</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Example — single prediction</h3>
+    <pre class="code-block">POST /api/predict
+Content-Type: application/json
+
+{
+  "dur": 0.121478,
+  "proto": "tcp",
+  "service": "http",
+  "state": "FIN",
+  "spkts": 6,
+  "dpkts": 4,
+  "sbytes": 496,
+  "dbytes": 568,
+  ...
+}
+
+→ 200 OK
+{
+  "label": "Exploits",
+  "suspicious": true,
+  "p_malicious": 0.9812,
+  "margin": 0.4321,
+  "escalated": false,
+  "top": [["Exploits", 0.6543], ["Generic", 0.2222]],
+  "probs": { "Exploits": 0.6543, "Generic": 0.2222, ... },
+  "thresholds": { "binary": 0.45, "margin": 0.20 }
+}</pre>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <span>Uncertainty-Aware Cascaded Ensemble · UNSW-NB15</span>
+  <span id="status-dot" class="status-dot" title="Checking model status…">●</span>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

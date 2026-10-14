@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traffic Screening Console</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <h1>Traffic Screening Console</h1>
+    <nav role="tablist" aria-label="Views">
+      <button role="tab" class="tab on" data-view="single" aria-selected="true">Single record</button>
+      <button role="tab" class="tab" data-view="batch" aria-selected="false">Batch file</button>
+      <button role="tab" class="tab" data-view="perf" aria-selected="false">Model performance</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<!-- ============ SINGLE RECORD ============ -->
+<section id="view-single" class="view">
+  <div class="split">
+    <div class="pane">
+      <h2>Traffic record</h2>
+      <p class="hint">One UNSW-NB15 record as JSON. Load a random record from the test set, or paste your own.</p>
+      <textarea id="record" spellcheck="false" aria-label="Traffic record JSON" placeholder='{"dur": 0.12, "proto": "tcp", "service": "http", ...}'></textarea>
+      <div class="row">
+        <button id="btn-sample" class="btn ghost">Load test record</button>
+        <button id="btn-analyze" class="btn">Analyze record</button>
+      </div>
+      <p id="actual" class="hint" hidden></p>
+      <p id="single-error" class="error" role="alert" hidden></p>
+    </div>
+
+    <div class="pane" id="result-pane">
+      <h2>Result</h2>
+      <div id="empty" class="empty">No record analyzed yet. Load a test record and select Analyze record.</div>
+      <div id="result" hidden>
+        <div id="verdict" class="verdict"></div>
+
+        <h3>Stage 1: screening</h3>
+        <div class="meter" id="m-stage1">
+          <div class="meter-fill" id="m-stage1-fill"></div>
+          <div class="meter-tick" id="m-stage1-tick"></div>
+        </div>
+        <p class="meter-note" id="stage1-note"></p>
+
+        <div id="stage2">
+          <h3>Stage 2: attack category</h3>
+          <div id="class-bars"></div>
+
+          <h3>Stage 3: confidence margin</h3>
+          <div class="meter" id="m-margin">
+            <div class="meter-fill" id="m-margin-fill"></div>
+            <div class="meter-tick" id="m-margin-tick"></div>
+          </div>
+          <p class="meter-note" id="margin-note"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ BATCH ============ -->
+<section id="view-batch" class="view" hidden>
+  <div class="pane wide">
+    <h2>Batch file</h2>
+    <p class="hint">Upload a CSV in UNSW-NB15 format. The first 20,000 rows are analyzed.</p>
+    <div class="row">
+      <input type="file" id="file" accept=".csv" aria-label="CSV file">
+      <button id="btn-batch" class="btn">Analyze file</button>
+    </div>
+    <p id="batch-error" class="error" role="alert" hidden></p>
+
+    <div id="batch-out" hidden>
+      <dl class="stats" id="batch-stats"></dl>
+      <h3>Predicted categories</h3>
+      <div id="batch-bars"></div>
+      <h3 id="batch-table-title">Records</h3>
+      <div class="table-wrap">
+        <table id="batch-table">
+          <thead><tr><th>Row</th><th>Prediction</th><th>Malicious probability</th><th>Margin</th><th>Status</th><th>Actual</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PERFORMANCE ============ -->
+<section id="view-perf" class="view" hidden>
+  <div class="pane wide">
+    <h2>Model performance</h2>
+    <p class="hint">Measured on the held-out UNSW-NB15 test set. Thresholds were chosen on validation data only.</p>
+    <p id="perf-error" class="error" hidden></p>
+    <div id="perf-out" hidden>
+      <dl class="stats" id="perf-stats"></dl>
+      <h3>Per-class results</h3>
+      <div class="table-wrap">
+        <table id="perf-table">
+          <thead><tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1</th><th>Records</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p id="perf-baseline" class="hint"></p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
